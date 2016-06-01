@@ -1,0 +1,11 @@
+name: docker-registry
+description: A Helm chart for gocd ci server with DIND
+version: 0.1.0
+keywords:
+  - gocd
+home: "https://github.com/maratoid/ci_experiments"
+sources:
+  - https://github.com/maratoid/ci_experiments
+maintainers:
+  - name: Marat Garafutdinov
+    email: maratoid@gmail.com

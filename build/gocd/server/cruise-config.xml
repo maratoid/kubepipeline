@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<cruise xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="cruise-config.xsd" schemaVersion="78">
+  <server artifactsdir="artifacts" agentAutoRegisterKey="uMnRBtjXr1y73455MLkYhnWZAB4yi7VX" commandRepositoryLocation="default" serverId="95933741-bef3-469f-a295-4cefd701de95" />
+  <repositories>
+    <repository id="6e4babe4-6512-4094-b67c-99c1b4b62a5a" name="centos_extras">
+      <pluginConfiguration id="yum" version="2" />
+      <configuration>
+        <property>
+          <key>REPO_URL</key>
+          <value>http://mirror.pac-12.org/7.2.1511/extras/x86_64/</value>
+        </property>
+      </configuration>
+      <packages>
+        <package id="3c911d5a-e897-4545-bba6-4f2e5a61eda3" name="etcd">
+          <configuration>
+            <property>
+              <key>PACKAGE_SPEC</key>
+              <value>etcd-2.2.5-1.el7.x86_64</value>
+            </property>
+          </configuration>
+        </package>
+      </packages>
+    </repository>
+  </repositories>
+  <pipelines group="derp">
+    <pipeline name="dockerize" isLocked="false">
+      <materials>
+        <package ref="3c911d5a-e897-4545-bba6-4f2e5a61eda3" />
+      </materials>
+      <stage name="CreatePackageFolder">
+        <approval type="manual" />
+        <jobs>
+          <job name="mkdir">
+            <tasks>
+              <exec command="mkdir">
+                <arg>-p</arg>
+                <arg>/tmp/etcd_artefact</arg>
+                <runif status="passed" />
+              </exec>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="DownloadPackage" cleanWorkingDir="true">
+        <jobs>
+          <job name="DownloadRpm">
+            <tasks>
+              <exec command="/bin/bash">
+                <arg>-c</arg>
+                <arg>curl -o /tmp/etcd_artefact/$GO_PACKAGE_CENTOS_EXTRAS_ETCD_LABEL.rpm $GO_PACKAGE_CENTOS_EXTRAS_ETCD_LOCATION</arg>
+                <runif status="passed" />
+              </exec>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="CreateDockerfile">
+        <jobs>
+          <job name="createFile">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>cat &lt;&lt; EOF &gt; /tmp/etcd_artefact/Dockerfile&#xD;
+FROM centos&#xD;
+COPY $GO_PACKAGE_CENTOS_EXTRAS_ETCD_LABEL.rpm /$GO_PACKAGE_CENTOS_EXTRAS_ETCD_LABEL.rpm&#xD;
+RUN rpm -U /$GO_PACKAGE_CENTOS_EXTRAS_ETCD_LABEL.rpm&#xD;
+EOF</value>
+                  </property>
+                </configuration>
+                <runif status="passed" />
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="RunDocker">
+        <jobs>
+          <job name="docker">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>sudo docker build -t docker-registry:5000/etcd /tmp/etcd_artefact/&#xD;
+sudo docker push docker-registry:5000/etcd</value>
+                  </property>
+                </configuration>
+                <runif status="passed" />
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="smokeTest">
+        <jobs>
+          <job name="testContainer">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>sudo docker run docker-registry:5000/etcd etcdctl -v</value>
+                  </property>
+                </configuration>
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+    </pipeline>
+    <pipeline name="test">
+      <materials>
+        <pipeline pipelineName="dockerize" stageName="RunDocker" />
+      </materials>
+      <stage name="tagContainerStage">
+        <jobs>
+          <job name="tagStage">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>sudo docker tag docker-registry:5000/etcd:latest docker-registry:5000/etcd:staging&#xD;
+sudo docker push docker-registry:5000/etcd:staging</value>
+                  </property>
+                </configuration>
+                <runif status="passed" />
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="kubectl">
+        <jobs>
+          <job name="kubectlDeploy">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>kubectl get pods --namespace=helm --kubeconfig=/etc/kubeconfig/config</value>
+                  </property>
+                </configuration>
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+    </pipeline>
+    <pipeline name="deployProd">
+      <materials>
+        <pipeline pipelineName="test" stageName="kubectl" />
+      </materials>
+      <stage name="tageContainerProd">
+        <jobs>
+          <job name="tagProd">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>sudo docker tag docker-registry:5000/etcd:staging docker-registry:5000/etcd:prod&#xD;
+sudo docker push docker-registry:5000/etcd:prod</value>
+                  </property>
+                </configuration>
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="kubeDeploy">
+        <jobs>
+          <job name="kubectlDeploy">
+            <tasks>
+              <task>
+                <pluginConfiguration id="script-executor" version="1" />
+                <configuration>
+                  <property>
+                    <key>script</key>
+                    <value>kubectl get pods --namespace=helm --kubeconfig=/etc/kubeconfig/config</value>
+                  </property>
+                </configuration>
+              </task>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+    </pipeline>
+  </pipelines>
+  <environments>
+    <environment name="dev">
+      <pipelines>
+        <pipeline name="dockerize" />
+      </pipelines>
+    </environment>
+    <environment name="stage">
+      <pipelines>
+        <pipeline name="test" />
+      </pipelines>
+    </environment>
+    <environment name="prod">
+      <pipelines>
+        <pipeline name="deployProd" />
+      </pipelines>
+    </environment>
+  </environments>
+</cruise>

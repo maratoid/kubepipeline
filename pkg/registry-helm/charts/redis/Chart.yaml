@@ -1,0 +1,11 @@
+name: redis
+description: A Helm chart for redis
+version: 0.1.0
+keywords:
+  - redis
+home: "https://github.com/maratoid/docker-regsitry-chart"
+sources:
+  - https://github.com/maratoid/docker-regsitry-chart
+maintainers:
+  - name: Marat Garafutdinov
+    email: maratoid@gmail.com

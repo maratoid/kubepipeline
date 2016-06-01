@@ -1,0 +1,13 @@
+name: docker-registry
+description: A Helm chart for docker registry v2
+version: 0.1.0
+keywords:
+  - registry
+  - docker
+  - v2
+home: "https://github.com/maratoid/docker-registry-chart"
+sources:
+  - https://github.com/maratoid/docker-registry-chart
+maintainers:
+  - name: Marat Garafutdinov
+    email: maratoid@gmail.com

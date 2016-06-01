@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: gocd
+  labels:
+    name: gocd
+spec:
+  replicas: 1
+  selector:
+    name: gocd
+  template:
+    metadata:
+      labels:
+        name: gocd
+    spec:
+      containers:
+      - image: {{.privateRegistry}}/gocd-server
+        imagePullPolicy: Always
+        name: gocd-server
+        ports:
+        - containerPort: 8153
+          hostPort: 8153
+          protocol: TCP
+        - containerPort: 8154
+          hostPort: 8154
+          protocol: TCP
+      - image: {{.privateRegistry}}/gocd-agent
+        imagePullPolicy: Always
+        name: gocd-agent
+        securityContext:
+          privileged: true
+        env:
+        - name: GO_SERVER
+          value: localhost
+        volumeMounts: 
+          - mountPath: /etc/kubeconfig
+            name: kube-config
+            readOnly: true
+      volumes:
+        - name: kube-config
+          secret:
+            secretName: kubeconfig-secret
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gocd
+  labels:
+    name: gocd
+spec:
+  ports:
+  - name: gocd
+    port: 8153
+    protocol: TCP
+    targetPort: 8153
+  selector:
+    name: gocd
+  sessionAffinity: None
+  type: LoadBalancer
+
